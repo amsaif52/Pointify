@@ -10,14 +10,23 @@ const redis = url && token ? new Redis({ url, token }) : null;
 
 export const storageBackend = redis ? "redis" : "memory";
 
-if (storageBackend === "memory" && process.env.NODE_ENV === "production") {
-  // Serverless deployments run many instances, each with its own Map, so a
-  // room created on one is a 404 on the next. Fail loudly rather than shipping
-  // a build where sessions vanish at random.
-  console.warn(
-    "[pointify] No Upstash credentials found — falling back to in-memory " +
-      "sessions. Rooms will not survive a restart and will break across " +
-      "instances. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+/**
+ * Serverless deployments run many instances, each with its own Map, so a room
+ * created on one is a 404 on the next — which surfaces as "that room is gone"
+ * the instant the host lands in a room they just created. Refuse to serve at
+ * all rather than hand out rooms that only exist on one instance.
+ *
+ * Thrown per request rather than at import time so a build without credentials
+ * still succeeds; the routes are all force-dynamic, so nothing calls in here
+ * until a real request arrives.
+ */
+function assertUsableBackend() {
+  if (redis || process.env.NODE_ENV !== "production") return;
+  throw new Error(
+    "[pointify] No Upstash credentials found. Set UPSTASH_REDIS_REST_URL and " +
+      "UPSTASH_REDIS_REST_TOKEN in the deployment environment — in-memory " +
+      "sessions cannot work across serverless instances. (Vercel KV injects " +
+      "KV_REST_API_URL / KV_REST_API_TOKEN; those names are not read here.)",
   );
 }
 
@@ -35,6 +44,7 @@ function key(id: string) {
 }
 
 export async function readSession(id: string): Promise<Session | null> {
+  assertUsableBackend();
   if (!redis) {
     const s = mem.get(key(id));
     return s ? (structuredClone(s) as Session) : null;
@@ -45,6 +55,7 @@ export async function readSession(id: string): Promise<Session | null> {
 }
 
 export async function createSession(session: Session): Promise<void> {
+  assertUsableBackend();
   if (!redis) {
     mem.set(key(session.id), structuredClone(session) as Session);
     return;
@@ -55,6 +66,7 @@ export async function createSession(session: Session): Promise<void> {
 }
 
 export async function deleteSession(id: string): Promise<void> {
+  assertUsableBackend();
   if (!redis) {
     mem.delete(key(id));
     return;

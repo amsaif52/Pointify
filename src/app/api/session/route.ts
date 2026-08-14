@@ -34,7 +34,17 @@ export async function POST(req: Request) {
     lastSeen: now,
   };
 
-  await createSession(session);
+  // A room that cannot be stored is worse than no room at all: the host would
+  // be redirected into it and find it already gone, so refuse up front.
+  try {
+    await createSession(session);
+  } catch (err) {
+    console.error("[pointify] could not store a new session:", err);
+    return NextResponse.json(
+      { error: "Session storage is unavailable, so rooms cannot be created." },
+      { status: 503 },
+    );
+  }
   await writeParticipantId(session.id, participantId);
 
   return NextResponse.json({
