@@ -1,5 +1,5 @@
 import { mutate, readSession } from "@/lib/store";
-import { prune, toPublic } from "@/lib/session";
+import { clearIfHostGone, prune, toPublic } from "@/lib/session";
 import { readParticipantId } from "@/lib/auth";
 import { youPayload } from "@/lib/you";
 
@@ -63,6 +63,14 @@ export async function GET(
         const session = await readSession(sessionId).catch(() => null);
         if (!session) {
           send("gone", { error: "Session not found." });
+          close();
+          return;
+        }
+
+        // Whoever notices first clears the room, and every other stream sees
+        // the session vanish on its next read and closes the same way.
+        if (await clearIfHostGone(session).catch(() => false)) {
+          send("gone", { error: "The host ended this session." });
           close();
           return;
         }

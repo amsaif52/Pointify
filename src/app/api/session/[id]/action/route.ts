@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ConflictError, mutate, readSession } from "@/lib/store";
 import {
   archive,
+  clearIfHostGone,
   clearVotes,
   findBySlot,
   isValidCard,
@@ -19,6 +20,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Body = Record<string, unknown>;
+
+const HOST_LEFT = "The host ended this session.";
 
 const str = (v: unknown, max: number) =>
   typeof v === "string" ? v.trim().slice(0, max) : "";
@@ -41,6 +44,10 @@ export async function POST(
   const existing = await readSession(sessionId);
   if (!existing) {
     return NextResponse.json({ error: "Session not found." }, { status: 404 });
+  }
+  // Nobody joins or acts in a room whose host has already left.
+  if (await clearIfHostGone(existing)) {
+    return NextResponse.json({ error: HOST_LEFT }, { status: 404 });
   }
 
   let me = await readParticipantId(sessionId);
@@ -226,6 +233,10 @@ export async function POST(
       { error: `Unknown action "${action}".` },
       { status: 400 },
     );
+  }
+  // The host leaving is the one action that takes the room with it.
+  if (updated && (await clearIfHostGone(updated))) {
+    return NextResponse.json({ error: HOST_LEFT }, { status: 404 });
   }
   return ok(updated, self);
 }

@@ -1,5 +1,6 @@
 import { customAlphabet } from "nanoid";
 import { DEFAULT_SCALE, getScale } from "./scales";
+import { deleteSession } from "./store";
 import type { Participant, PublicSession, Session } from "./types";
 
 /** No look-alike characters — session IDs get read aloud over a call. */
@@ -29,19 +30,35 @@ export function emptySession(adminId: string): Session {
   };
 }
 
-/** Drops participants whose tab has gone away, reassigning admin if needed. */
+/** Drops participants whose tab has gone away. */
 export function prune(s: Session, now = Date.now()): Session {
   for (const [id, p] of Object.entries(s.participants)) {
     if (now - p.lastSeen > PRESENCE_TIMEOUT_MS) delete s.participants[id];
   }
-  const ids = Object.keys(s.participants);
-  if (ids.length > 0 && !s.participants[s.adminId]) {
-    // Hand the room to whoever has been here longest.
-    s.adminId = ids.reduce((a, b) =>
-      s.participants[a].joinedAt <= s.participants[b].joinedAt ? a : b,
-    );
-  }
   return s;
+}
+
+/**
+ * The room belongs to its host: when they go, it goes with them. Reads
+ * lastSeen directly instead of assuming prune has already run, so every caller
+ * reaches the same verdict at the same instant.
+ */
+export function hostGone(s: Session, now = Date.now()): boolean {
+  const host = s.participants[s.adminId];
+  return !host || now - host.lastSeen > PRESENCE_TIMEOUT_MS;
+}
+
+/**
+ * Clears the room once its host has left. Returns true when the session is
+ * gone, in which case the caller must not serve its contents.
+ */
+export async function clearIfHostGone(
+  s: Session,
+  now = Date.now(),
+): Promise<boolean> {
+  if (!hostGone(s, now)) return false;
+  await deleteSession(s.id);
+  return true;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/store";
-import { toPublic } from "@/lib/session";
+import { clearIfHostGone, toPublic } from "@/lib/session";
 import { readParticipantId } from "@/lib/auth";
 import { youPayload } from "@/lib/you";
 
@@ -17,6 +17,12 @@ export async function GET(
   const session = await readSession(sessionId);
   if (!session) {
     return NextResponse.json({ error: "Session not found." }, { status: 404 });
+  }
+  if (await clearIfHostGone(session)) {
+    return NextResponse.json(
+      { error: "The host ended this session." },
+      { status: 404 },
+    );
   }
 
   const me = await readParticipantId(sessionId);

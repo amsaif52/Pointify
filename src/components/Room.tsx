@@ -568,6 +568,12 @@ function People({
           </li>
         ))}
       </ul>
+      {isAdmin ? (
+        <p className="mt-3 border-t border-ink-700/60 pt-3 text-xs text-ink-400">
+          You are the host — the room closes for everyone when you leave. Press
+          ★ to hand it over first.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -737,8 +743,8 @@ function NotFound() {
         <Logo className="mb-6" />
         <h1 className="text-2xl font-semibold">That room is gone</h1>
         <p className="mt-2 text-ink-400">
-          Sessions expire 12 hours after their last vote. Check the code, or
-          start a fresh one.
+          Rooms close when the host leaves, and expire 12 hours after their last
+          vote. Check the code, or start a fresh one.
         </p>
         <Link
           href="/"

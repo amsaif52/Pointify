@@ -54,6 +54,14 @@ export async function createSession(session: Session): Promise<void> {
   });
 }
 
+export async function deleteSession(id: string): Promise<void> {
+  if (!redis) {
+    mem.delete(key(id));
+    return;
+  }
+  await redis.del(key(id));
+}
+
 /**
  * Compare-and-set on the session's version field. Returns 1 on success, 0 if
  * another writer got there first.

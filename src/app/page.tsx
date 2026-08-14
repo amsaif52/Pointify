@@ -161,7 +161,8 @@ export default function Home() {
       </div>
 
       <footer className="border-t border-ink-700/60 pt-6 text-sm text-ink-400">
-        Rooms clear themselves 12 hours after the last vote.
+        Rooms close when the host leaves, and clear themselves 12 hours after
+        the last vote.
       </footer>
     </main>
   );
