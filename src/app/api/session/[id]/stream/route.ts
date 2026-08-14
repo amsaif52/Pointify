@@ -57,10 +57,26 @@ export async function GET(
             p.lastSeen = Date.now();
             prune(s);
             return s;
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error(
+              `[pointify] presence write failed for ${sessionId}:`,
+              err,
+            );
+          });
         }
 
-        const session = await readSession(sessionId).catch(() => null);
+        // A read that throws means we could not reach the store — which is not
+        // the same thing as the room being deleted. Reporting it as "gone"
+        // would tear down a session that is perfectly alive, so hold the
+        // stream open and let the next tick try again.
+        let session;
+        try {
+          session = await readSession(sessionId);
+        } catch (err) {
+          console.error(`[pointify] session read failed for ${sessionId}:`, err);
+          return;
+        }
+
         if (!session) {
           send("gone", { error: "Session not found." });
           close();
@@ -69,7 +85,11 @@ export async function GET(
 
         // Whoever notices first clears the room, and every other stream sees
         // the session vanish on its next read and closes the same way.
-        if (await clearIfHostGone(session).catch(() => false)) {
+        const cleared = await clearIfHostGone(session).catch((err) => {
+          console.error(`[pointify] clearing ${sessionId} failed:`, err);
+          return false;
+        });
+        if (cleared) {
           send("gone", { error: "The host ended this session." });
           close();
           return;
