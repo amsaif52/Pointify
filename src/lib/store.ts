@@ -16,6 +16,11 @@ export const storageBackend = redis ? "redis" : "memory";
  * the instant the host lands in a room they just created. Refuse to serve at
  * all rather than hand out rooms that only exist on one instance.
  *
+ * Guards creation only — the point where the unusable state originates. Reads
+ * deliberately stay soft: a room that was never stored reads back as missing,
+ * which the callers already handle, whereas throwing there turns every room URL
+ * into an endless reconnect loop against a store that will never answer.
+ *
  * Thrown per request rather than at import time so a build without credentials
  * still succeeds; the routes are all force-dynamic, so nothing calls in here
  * until a real request arrives.
@@ -44,7 +49,6 @@ function key(id: string) {
 }
 
 export async function readSession(id: string): Promise<Session | null> {
-  assertUsableBackend();
   if (!redis) {
     const s = mem.get(key(id));
     return s ? (structuredClone(s) as Session) : null;
@@ -66,7 +70,6 @@ export async function createSession(session: Session): Promise<void> {
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  assertUsableBackend();
   if (!redis) {
     mem.delete(key(id));
     return;

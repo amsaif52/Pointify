@@ -74,6 +74,14 @@ export async function GET(
           session = await readSession(sessionId);
         } catch (err) {
           console.error(`[pointify] session read failed for ${sessionId}:`, err);
+          // Still let the stream age out. Returning straight away would skip
+          // the cycle check below, so a store that stays unreachable would hold
+          // this function open until the platform killed it — and the client
+          // reconnects on its own, so there is nothing to gain by holding on.
+          if (Date.now() - startedAt > STREAM_TTL_MS) {
+            send("cycle", {});
+            close();
+          }
           return;
         }
 
